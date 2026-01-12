@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Web2 Container</title>
+
+    <style>
+        body {
+          font-family: Arial, sans-serif;
+          margin: 16px;
+        }
+        #iframeContainer {
+          margin-top: 16px;
+          width: 100%;
+          height: 80vh;
+          border: none;
+        }
+        #status {
+          margin-top: 10px;
+          font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<h2>Web2 Container</h2>
+
+<button id="sendButton">Gửi PDF (ArrayBuffer) sang Web1</button>
+<div id="status">Chưa có dữ liệu</div>
+
+<iframe
+        id="iframeContainer"
+        src="http://10.1.27.129:10841/#/add-image-to-file">
+</iframe>
+
+<script>
+    const iframe = document.getElementById("iframeContainer");
+    const statusDiv = document.getElementById("status");
+    const sendButton = document.getElementById("sendButton");
+
+    /* =========================================================
+     * FIX 1: Lắng nghe message từ Web1 (Flutter Web)
+     * ========================================================= */
+    window.addEventListener("message", (event) => {
+      if (event.origin === "http://10.1.27.129:10841") {
+        console.log("[Web2] Receive from Web1:", event.data);
+        statusDiv.textContent = "Nhận phản hồi từ Web1";
+      }
+    });
+
+    /* =========================================================
+     * FIX 2: Gửi PDF bằng ArrayBuffer (KHÔNG Base64)
+     * ========================================================= */
+    sendButton.addEventListener("click", async () => {
+      try {
+        statusDiv.textContent = "Đang load PDF...";
+
+        /* -----------------------------------------------------
+         * FIX 2.1: Load PDF (có thể thay bằng fetch API thật)
+         * ----------------------------------------------------- */
+        const pdfUrl = "/sample.pdf"; // 👉 thay bằng PDF thật
+        const response = await fetch(pdfUrl);
+        const pdfArrayBuffer = await response.arrayBuffer();
+
+        console.log("[Web2] PDF loaded, bytes =", pdfArrayBuffer.byteLength);
+
+        /* -----------------------------------------------------
+         * FIX 2.2: Tạo message object (KHÔNG stringify)
+         * ----------------------------------------------------- */
+        const message = {
+          type: "INIT_PDF",                // Flutter dùng key này để phân biệt
+          employeeIds: [41044827],
+          pdfBuffer: pdfArrayBuffer,       // 🔥 ArrayBuffer
+          lstSignImageLocationDto: []
+        };
+
+        /* -----------------------------------------------------
+         * FIX 2.3: postMessage + Transfer ownership
+         * ----------------------------------------------------- */
+        iframe.contentWindow.postMessage(
+          message,
+          "http://10.1.27.129:10841",
+          [pdfArrayBuffer] // 🔥 RẤT QUAN TRỌNG: transfer ownership
+        );
+
+        statusDiv.textContent = "Đã gửi PDF (ArrayBuffer) sang Web1";
+        console.log("[Web2] postMessage success");
+
+      } catch (err) {
+        console.error("[Web2] Error:", err);
+        statusDiv.textContent = "Lỗi khi gửi PDF";
+      }
+    });
+</script>
+
+</body>
+</html>
